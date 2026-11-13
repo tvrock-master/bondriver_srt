@@ -1,0 +1,43 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_TAG && $CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: never
+
+stages:
+  - build
+  - release
+
+default:
+  # GitLab.com hosted Windows runner; change for a self-managed runner.
+  # Requires PowerShell, MSVC x86/x64, Windows SDK, CMake and Ninja.
+  tags:
+    - saas-windows-medium-amd64
+
+build:
+  stage: build
+  timeout: 30 minutes
+  script:
+    - powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./build-artifact.ps1
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  artifacts:
+    name: 'BonDriver_SRT-$CI_COMMIT_REF_SLUG'
+    paths:
+      - dist/BonDriver_SRT.zip
+    expire_in: 7 days
+
+release:
+  stage: release
+  timeout: 10 minutes
+  rules:
+    - if: '$CI_COMMIT_TAG && $CI_PIPELINE_SOURCE == "push"'
+  needs:
+    - job: build
+      artifacts: true
+  script:
+    - powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish-gitlab-release.ps1
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

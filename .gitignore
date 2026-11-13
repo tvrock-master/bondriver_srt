@@ -1,0 +1,7 @@
+/.deps/
+/build/
+/dist/
+*.ini
+*.log
+/.vs/
+/.vscode/

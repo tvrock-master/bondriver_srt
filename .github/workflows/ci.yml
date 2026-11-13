@@ -1,0 +1,84 @@
+name: Tests and release
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: startsWith(github.ref, 'refs/heads/')
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Test x64
+        run: ./build.ps1 -Architecture x64 -Configuration Release -Test
+
+      - name: Test x86
+        run: ./build.ps1 -Architecture x86 -Configuration Release -Test
+
+  build:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build and package x64/x86
+        run: ./build-artifact.ps1 -SkipTests
+
+      - name: Upload distribution
+        uses: actions/upload-artifact@v7
+        with:
+          name: BonDriver_SRT
+          path: dist/BonDriver_SRT.zip
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: windows-2022
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: BonDriver_SRT
+          path: release
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # A failed lookup may also be an authentication/server error. Only a 404 permits creation.
+          $response = gh api "repos/$env:GH_REPO/releases/tags/$([Uri]::EscapeDataString($env:RELEASE_TAG))" 2>&1
+          if ($LASTEXITCODE -eq 0) {
+              gh release upload "$env:RELEASE_TAG" ./release/BonDriver_SRT.zip --clobber
+          } elseif (($response -join "`n") -match '\(HTTP 404\)') {
+              gh release create "$env:RELEASE_TAG" ./release/BonDriver_SRT.zip --verify-tag --title "$env:RELEASE_TAG" --generate-notes
+          } else {
+              throw "Cannot look up GitHub Release: $response"
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }

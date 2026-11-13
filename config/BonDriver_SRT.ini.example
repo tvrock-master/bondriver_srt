@@ -1,0 +1,9 @@
+[SRT]
+; Numeric IPv4 bind address. Use a local LAN address or 0.0.0.0 for remote senders.
+ListenAddress=127.0.0.1
+; SRT 0 through SRT 9 use BasePort through BasePort + 9.
+BasePort=3230
+; Receive latency in milliseconds, from 0 to 60000.
+LatencyMs=120
+; Empty disables encryption. Otherwise use 10..79 printable ASCII characters.
+Passphrase=
